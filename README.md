@@ -1,10 +1,12 @@
 # Cafe Ordering Application
 
-Python application that simulates self-service beverage ordering in a cafe via tablet.
+Python application that simulates self-service beverage ordering in a cafe via tablet. The project has been extended with Docker and Snap packaging for the Operating Systems course.
 
 ## Description
 
 Each table in the cafe has a tablet where guests can independently order beverages through a graphical user interface without waiter assistance. The application supports parallel processing of multiple orders, simulating multiple tables ordering simultaneously.
+
+The REST API server can be run directly with Python, inside a Docker container, or installed as a Snap package on any Linux distribution that supports snapd.
 
 ## Features
 
@@ -18,11 +20,15 @@ Each table in the cafe has a tablet where guests can independently order beverag
 - Decorators for logging function calls and exception handling
 - Daily report export in CSV and PDF format
 - Unit tests for key components
+- Docker container for the REST API
+- Snap package with the REST API as a system service
 
 ## Requirements
 
 - Python 3.8 or higher
 - Packages listed in requirements.txt
+- Docker Engine 20.10+ (for the container)
+- snapd and snapcraft (for building the Snap package)
 
 ## Installation
 
@@ -44,11 +50,13 @@ Start GUI directly:
 python -m gui.tablet_gui
 ```
 
-Test parallel processing with multiple instances:
+Start only the REST API server:
 
 ```bash
-python test_parallel_orders.py
+python -m services.api_server
 ```
+
+The API server reads optional environment variables `API_HOST` (default `0.0.0.0`) and `API_PORT` (default `8080`).
 
 ## Testing
 
@@ -66,6 +74,130 @@ pytest tests/test_order_service.py -v
 pytest tests/test_beverage.py -v
 ```
 
+## Docker
+
+The repository contains a `Dockerfile`, `.dockerignore` and `docker-compose.yml` that package the REST API into a container. The GUI is not containerized because Tkinter requires a display server; only the headless API runs inside the container.
+
+Build and run the container:
+
+```bash
+docker compose up --build
+```
+
+The image is based on `python:3.11-slim`. On the first build Docker downloads the base image and installs the Python dependencies, which takes a few minutes. Subsequent builds use the cache and finish in seconds.
+
+The container exposes port 8080 and is mapped to port 8080 on the host. Once the container is running, you can test the endpoints:
+
+```bash
+curl http://localhost:8080/health
+curl http://localhost:8080/api/menu
+curl http://localhost:8080/api/beverages/1
+```
+
+To stop and remove the container:
+
+```bash
+docker compose down
+```
+
+Useful commands while the container is running:
+
+```bash
+docker ps                       # list running containers
+docker images                   # list local images
+docker logs ordering-api        # view container logs
+docker exec -it ordering-api sh # open a shell inside the container
+```
+
+The compose file also configures a healthcheck on `/health` that runs every 30 seconds.
+
+## Snap
+
+The repository contains `snap/snapcraft.yaml` describing a strictly confined Snap package. Two apps are defined:
+
+- `api-server` runs as a `simple` daemon and starts automatically after installation
+- `demo` is a CLI command that runs the included demo script
+
+Build the Snap package (requires LXD as the build backend):
+
+```bash
+snapcraft pack --use-lxd
+```
+
+The build runs inside a clean LXD container so it does not depend on the host environment. The first build pulls the Ubuntu 22.04 image and takes around 5 to 10 minutes. The output is a file named `ordering-application_1.0.0_amd64.snap`.
+
+Install the locally built Snap:
+
+```bash
+sudo snap install ordering-application_1.0.0_amd64.snap --dangerous
+```
+
+The `--dangerous` flag is required because the Snap is not signed by the Snap Store.
+
+After installation the API server starts automatically. Verify with:
+
+```bash
+snap services ordering-application
+sudo snap logs ordering-application.api-server
+curl http://localhost:8080/health
+```
+
+Run the demo command:
+
+```bash
+ordering-application.demo
+```
+
+Other useful Snap commands:
+
+```bash
+snap list                                    # list installed snaps
+snap info ordering-application               # details about the snap
+snap connections ordering-application        # check granted plugs
+sudo snap stop ordering-application.api-server
+sudo snap start ordering-application.api-server
+sudo snap remove ordering-application
+```
+
+The Snap requests `network` and `network-bind` interfaces, which are auto-connected on installation. No manual `snap connect` step is required.
+
+### WSL note
+
+Running snapd inside WSL2 requires systemd. Enable it once by adding the following to `/etc/wsl.conf`:
+
+```
+[boot]
+systemd=true
+```
+
+Then run `wsl --shutdown` from PowerShell and reopen the Ubuntu terminal.
+
+### Building for Raspberry Pi
+
+The same `snapcraft.yaml` can be used to build a Snap for ARM devices like Raspberry Pi:
+
+```bash
+snapcraft pack --use-lxd --build-for=arm64
+```
+
+The resulting `.snap` file can be transferred to a Raspberry Pi running Ubuntu Core or Ubuntu Server and installed with `sudo snap install ... --dangerous`.
+
+## REST API
+
+The API server listens on `http://0.0.0.0:8080` by default. Host and port can be overridden with the `API_HOST` and `API_PORT` environment variables.
+
+Endpoints:
+
+- `GET /api/menu` - returns the full beverage menu with prices and happy hour status
+- `GET /api/beverages/{id}` - returns details for a single beverage by id
+- `GET /health` - returns service health status, used by the Docker healthcheck
+
+Example response from `/health`:
+
+```json
+{"status": "ok", "service": "beverage-api"}
+```
+
 ## Architecture
 
 ### Design Patterns
@@ -78,44 +210,43 @@ pytest tests/test_beverage.py -v
 - `services/pricing_strategy.py` - PricingContext and strategies
 - StandardPricingStrategy - standard price
 - HappyHourStrategy - discount (16:00-18:00)
-- BulkDiscountStrategy - discount for larger quantities
+- DiscountStrategy - percentage discount
 
-### Decorators
-
-- `@log_calls` - logging function calls
-- `@log_async_calls` - logging asynchronous functions
-- `@catch_exceptions` - catching and logging exceptions
-- `@catch_async_exceptions` - catching exceptions in async functions
-- `@performance_log` - performance measurement
-
-All logs are saved to `log.txt`.
+**Decorator Pattern** - Function wrapping
+- `decorators/logger.py` - logging function calls
+- `decorators/exception_handler.py` - centralized exception handling
 
 ### Concurrency
 
-- `asyncio` - parallel order processing
-- `aiohttp` - REST API server and client
-- `OrderService` - asynchronous order processing with status changes
-- Event loop in separate thread for GUI integration
+The application uses `asyncio` for concurrent order processing. Multiple tablets can place orders simultaneously without blocking each other. The REST API is served with `aiohttp`, which is also based on asyncio.
 
-### Project Structure
+## Project Structure
 
 ```
-aplikacija za narucivanje/
-├── main.py                 # Main entry point
-├── requirements.txt        # Dependencies
-├── log.txt                 # Log file
-├── decorators/
-│   └── logging_decorators.py
-├── models/
-│   ├── beverage.py        # Beverage classes
-│   └── factory.py         # Factory pattern
+Ordering-Application-Docker-Snap/
+├── main.py                 # Application entry point
+├── requirements.txt        # Python dependencies
+├── Dockerfile              # Docker image recipe
+├── .dockerignore           # Files excluded from the Docker build context
+├── docker-compose.yml      # Docker Compose configuration
+├── snap/
+│   └── snapcraft.yaml      # Snap package definition
 ├── services/
-│   ├── api_server.py      # REST API server
-│   ├── menu_service.py    # API client
-│   ├── order_service.py   # Order processing
-│   └── pricing_strategy.py
+│   ├── api_server.py       # REST API server (aiohttp)
+│   ├── order_service.py    # Order processing
+│   └── pricing_strategy.py # Pricing strategies
+├── models/
+│   ├── beverage.py         # Beverage classes
+│   └── factory.py          # BeverageFactory
+├── decorators/
+│   ├── logger.py
+│   └── exception_handler.py
 ├── gui/
-│   └── tablet_gui.py      # Tkinter GUI
+│   └── tablet_gui.py       # Tkinter GUI
+├── demos/
+│   ├── demo_complete.py
+│   ├── demo_parallel_orders.py
+│   └── demo_strategy_pattern.py
 ├── exporters/
 │   ├── csv_exporter.py
 │   └── pdf_exporter.py
@@ -123,8 +254,7 @@ aplikacija za narucivanje/
 │   ├── test_beverage.py
 │   ├── test_order_service.py
 │   └── test_pricing_strategies.py
-├── izvjestaji/            # Report exports
-└── reports/               # Report exports
+└── reports/                # Generated CSV and PDF reports
 ```
 
 ## Technologies
@@ -135,23 +265,12 @@ aplikacija za narucivanje/
 - aiohttp (REST API)
 - pytest (testing)
 - reportlab (PDF reports)
-- csv (CSV reports)
-
-## REST API
-
-Server automatically starts on `http://localhost:8080`
-
-Endpoints:
-- `GET /api/menu` - complete menu
-- `GET /api/beverages/{id}` - individual beverage
-- `GET /health` - server status
+- Docker, Docker Compose
+- Snapcraft, snapd, LXD
 
 ## Reports
 
-Reports are generated in `izvjestaji/` and `reports/` directories:
+Reports are generated in the `reports/` directory:
+
 - CSV format with order details and statistics
 - PDF format with formatted reports and tables
-
-
-
-
