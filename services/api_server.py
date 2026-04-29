@@ -4,6 +4,7 @@ Uses aiohttp for async web server.
 """
 
 from aiohttp import web
+import os
 import json
 
 
@@ -139,7 +140,9 @@ def main():
     print("\nServer running on http://localhost:8080")
     print("Press Ctrl+C to stop")
     
-    web.run_app(app, host='localhost', port=8080)
+    host = os.environ.get('API_HOST', '0.0.0.0')
+    port = int(os.environ.get('API_PORT', 8080))
+    web.run_app(app, host=host, port=port)
 
 
 if __name__ == '__main__':

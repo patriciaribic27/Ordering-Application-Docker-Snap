@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+
+# Virtualna okruzenja
+venv
+env
+.venv
+.env
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Snap
+snap
+*.snap
+
+# Logovi i izvjesca
+*.log
+logs
+reports
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dokumentacija
+README.md
+*.md
