@@ -38,3 +38,10 @@ build/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Snap
+*.snap
+parts/
+prime/
+stage/
+snap/.snapcraft/

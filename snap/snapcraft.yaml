@@ -1,0 +1,55 @@
+name: ordering-application
+base: core22
+version: '1.0.0'
+summary: Cafe ordering application REST API
+description: |
+  Mock REST API server for cafe beverage menu.
+  Built for Operativni sustavi course at Mathos.
+
+  Endpoints:
+    - GET /api/menu          - returns full beverage menu
+    - GET /api/beverages/{id} - returns single beverage
+    - GET /health            - health check
+
+grade: stable
+confinement: strict
+
+apps:
+  api-server:
+    command: bin/python3 -m services.api_server
+    daemon: simple
+    install-mode: enable
+    plugs:
+      - network
+      - network-bind
+    environment:
+      API_HOST: "0.0.0.0"
+      API_PORT: "8080"
+      PYTHONPATH: "$SNAP:$SNAP/lib/python3.10/site-packages"
+
+  demo:
+    command: bin/python3 $SNAP/demos/demo_complete.py
+    plugs:
+      - network
+    environment:
+      PYTHONPATH: "$SNAP:$SNAP/lib/python3.10/site-packages"
+
+parts:
+  ordering-app:
+    plugin: python
+    source: .
+    python-requirements:
+      - requirements.txt
+    stage-packages:
+      - python3
+    build-packages:
+      - python3-pip
+    override-build: |
+      craftctl default
+      # Kopiraj sav Python kod u snap (services, models, decorators...)
+      cp -r $CRAFT_PART_SRC/services $CRAFT_PART_INSTALL/services
+      cp -r $CRAFT_PART_SRC/models $CRAFT_PART_INSTALL/models
+      cp -r $CRAFT_PART_SRC/decorators $CRAFT_PART_INSTALL/decorators
+      cp -r $CRAFT_PART_SRC/exporters $CRAFT_PART_INSTALL/exporters
+      cp -r $CRAFT_PART_SRC/demos $CRAFT_PART_INSTALL/demos
+      cp $CRAFT_PART_SRC/main.py $CRAFT_PART_INSTALL/main.py
