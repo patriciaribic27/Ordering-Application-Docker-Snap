@@ -1,25 +1,19 @@
-# Bazni image: Python 3.11 na slim Debian Linuxu
 FROM python:3.11-slim
 
-# Radni direktorij unutar kontejnera
+RUN apt-get update && apt-get install -y python3-tk tk libx11-6 libxext6 libxrender1 libxtst6 libxi6 && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Prvo kopiraj samo requirements.txt (Docker cache)
 COPY requirements.txt .
 
-# Instaliraj Python ovisnosti
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Kopiraj ostatak projekta
 COPY . .
 
-# Najavi port
 EXPOSE 8080
 
-# Defaultne environment varijable
 ENV API_HOST=0.0.0.0
 ENV API_PORT=8080
 ENV PYTHONUNBUFFERED=1
 
-# Pokreni server kada kontejner startuje
-CMD ["python", "-m", "services.api_server"]
+CMD ["python", "main.py"]
