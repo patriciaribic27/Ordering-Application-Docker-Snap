@@ -11,8 +11,15 @@ from pathlib import Path
 from typing import Callable, Any
 
 
-# Path to log file
-LOG_FILE = Path(__file__).parent.parent / "log.txt"
+from pathlib import Path
+import os
+
+snap_user_data = os.environ.get("SNAP_USER_DATA")
+if snap_user_data:
+    LOG_FILE = Path(snap_user_data) / "log.txt"
+else:
+    # kad se aplikacija pokreće lokalno (izvan snapa)
+    LOG_FILE = Path(__file__).parent.parent / "log.txt"
 
 
 def log_to_file(message: str):
